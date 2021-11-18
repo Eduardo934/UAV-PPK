@@ -88,7 +88,7 @@ shinyServer(function(input, output, session) {
                 tabBox(
                     title = "Procesos",
                     width = 10,
-                    height = "600px",
+                    height = "1100px",
                     id = "tabset1",
                     tabPanel("Datos", 
                              div(
