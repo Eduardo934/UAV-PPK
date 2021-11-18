@@ -19,9 +19,6 @@ shinyServer(function(input, output, session) {
         user_col = user,
         pwd_col = password,
         sodium_hashed = TRUE,
-        sessionid_col = sessionid,
-        cookie_getter = get_sessionids_from_db,
-        cookie_setter = add_sessionid_to_db,
         log_out = reactive(logout_init())
     )
 
