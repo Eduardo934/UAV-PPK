@@ -13,10 +13,10 @@ library(leaflet)
 
 
 # connect to, or setup and connect to local SQLite db
-if (file.exists("srv/shiny-server/my_db_file")) {
-  db <- dbConnect(SQLite(), "srv/shiny-server/my_db_file")
+if (file.exists("my_db_file.sqlite")) {
+  db <- dbConnect(SQLite(), "my_db_file.sqlite")
 } else {
-  db <- dbConnect(SQLite(), "srv/shiny-server/my_db_file")
+  db <- dbConnect(SQLite(), "my_db_file.sqlite")
   dbCreateTable(db, "sessionids", c(user = "TEXT", sessionid = "TEXT", login_time = "TEXT"))
   
   dbCreateTable(db, "user_base", c(user = "TEXT", password = "TEXT", permissions = "TEXT", name= "TEXT"))
