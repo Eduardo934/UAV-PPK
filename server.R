@@ -326,11 +326,11 @@ shinyServer(function(input, output, session) {
                 break;
             }
         }
-        puntoReferencia<- archivoPosEncabezado[renglonReferencia,1] %>%
+        puntoReferencia<- as.character(archivoPosEncabezado[renglonReferencia,1]) %>%
             strsplit( ":") %>%
             unlist()
         
-        coordenadasReferencia<-puntoReferencia[2] %>%
+        coordenadasReferencia<-as.character(puntoReferencia[2]) %>%
             strsplit("[| ]+") %>%
             unlist() %>%
             as.numeric()
