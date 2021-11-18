@@ -13,7 +13,7 @@ library(leaflet)
 
 
 # connect to, or setup and connect to local SQLite db
-if (file.exists("my_db_file")) {
+if (file.exists("srv/shiny-server/my_db_file")) {
   db <- dbConnect(SQLite(), "srv/shiny-server/my_db_file")
 } else {
   db <- dbConnect(SQLite(), "srv/shiny-server/my_db_file")
