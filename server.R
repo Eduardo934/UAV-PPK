@@ -157,7 +157,7 @@ shinyServer(function(input, output, session) {
     
         data <- usuarios$datos
         
-        datatable(data, options = list(
+        datatable(data[,c("user", "permissions", "name")], options = list(
             language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json'),
             pageLength = 10,
             scrollX = TRUE
@@ -208,7 +208,7 @@ shinyServer(function(input, output, session) {
             
             usuarios_base<-readRDS("user_base.rds")
             
-            if(length(which(usuarios_base == input$usuario))>0){
+            if(length(which(usuarios_base %in% input$usuario))>0){
                 showNotification(
                     h4("El nombre de usuario ya existe"), 
                     action = NULL, duration = 5, type = "warning")   
@@ -288,7 +288,7 @@ shinyServer(function(input, output, session) {
         req(input$posFile)
         req(input$mrkFile)
         #### Se asegura que los archivos tengan la extensión correcta
-        if(length(grep(".pos",input$posFile )) == 1 || length(grep(".MRK",input$mrkFile )) == 0){
+        if(length(grep(".pos",input$posFile )) %in% 1 || length(grep(".MRK",input$mrkFile )) %in% 0){
             showNotification(
                 h4("Asegurate de que los archivos sean:  .pos para Rinex y .mrk para el MRK"), 
                 action = NULL, duration = 5, type = "warning")
@@ -305,7 +305,7 @@ shinyServer(function(input, output, session) {
         ### Busca el encabezado en el archivo .pos
         #######Solo busca en los primeros 50 renglone ara evitar un loop infinito
         for(i in 1:30){
-            if(length(grep("latitude",  archivoPosEncabezado[i,1],fixed = TRUE)) == 0){
+            if(length(grep("latitude",  archivoPosEncabezado[i,1],fixed = TRUE)) %in% 0){
                 i = i +1
             }else{
                 ren_encabezado = i ## Encuentra el renglón donde empiezan los datos
@@ -319,7 +319,7 @@ shinyServer(function(input, output, session) {
         ### Busca el renglón donde se enceuntra el punto de referencia (ref pos)
         #######Solo busca en los primeros 50 renglone ara evitar un loop infinito
         for(i in 1:30){
-            if(length(grep("ref pos",  archivoPosEncabezado[i,1],fixed = TRUE)) == 0){
+            if(length(grep("ref pos",  archivoPosEncabezado[i,1],fixed = TRUE)) %in% 0){
                 i = i +1
             }else{
                 renglonReferencia = i ## Encuentra el renglón donde está el punto de referncia
@@ -402,7 +402,7 @@ shinyServer(function(input, output, session) {
     
     ############ depliega boton para hace el cálculo
     output$mostrarResultados<- renderUI(expr = if(!is.null(datos$archivoMrk) && !is.null(datos$archivoPos)){
-        req(datos$preProceso == TRUE)
+        req(datos$preProceso %in% TRUE)
         div(
             h3("Interpolar"),
             actionButton("iniciar", "Iniciar")
@@ -449,9 +449,13 @@ shinyServer(function(input, output, session) {
         
         removeModal()
         
+        
         rinex <- as.data.frame(datos$archivoPos)
-        #mrk <- readRDS("mrk.rds")
+        
         mrk <- as.data.frame(datos$archivoMrk)
+        
+        ### Asegurarse de que los nombres de las columnas sean los correctos para poder manejar las columnas
+        
         
         #Se crean matrices con los nombres de nuestros dato para despu?s agragarlas como columnas al data frame final
         gpst <- matrix(nrow = nrow(mrk), ncol = 1)
@@ -469,29 +473,26 @@ shinyServer(function(input, output, session) {
         sdu <- matrix(nrow = nrow(mrk), ncol = 1)
         
         #Se obtiene el valor m?nimo de nuestros datos, as? como el intervalo en el que varian
-        minimo <- min(rinex[,2])
-        diferencia <- 0.2
+        
         
         for (i in 1:nrow(mrk)){
-            #Se encuntran los valores de las referencias superior e inferior
-            referencia_inf_valor <- as.integer((mrk[,2][i]-minimo)/0.2)+1
-            referencia_sup_valor <- referencia_inf_valor+1
+            #Se encuntran los valores superior e inferior 
+            valor_inf_valor <- tail(rinex$GPST[rinex$GPST<mrk$V2[i]], n=1)
+            valor_sup_valor <- rinex$GPST[rinex$GPST>mrk$V2[i]][1]
             
-            #print(referencia_inf_valor)
-            #print(referencia_sup_valor)
+            #Con los valores se obtienen las referencias o indices
             
-            #Con las referencias se encuentran los valores ineferios y superior
-            valor_inf_valor <- rinex[,2][referencia_inf_valor]
-            valor_sup_valor <- rinex[,2][referencia_sup_valor]
+            referencia_inf_valor <- which(rinex$GPST==valor_inf_valor)
+            referencia_sup_valor <- which(rinex$GPST==valor_sup_valor)
             
             #print(valor_inf_valor)
-            #print(mrk[,2][i])
+            #print(mrk$V2[i])
             #print(valor_sup_valor)
             
             
-            #Con los valores superior e inerios se obtienen los pesos inferior y superior
-            peso_inf_valor <- (valor_sup_valor-mrk[,2][i])/0.2
-            peso_sup_valor <- (mrk[,2][i]-valor_inf_valor)/0.2
+            #Con los valores superior e inferior se obtienen los pesos inferior y superior
+            peso_inf_valor <- (valor_sup_valor-mrk$V2[i])/(valor_sup_valor - valor_inf_valor)
+            peso_sup_valor <- (mrk$V2[i]-valor_inf_valor)/(valor_sup_valor - valor_inf_valor)
             
             #print(peso_inf_valor)
             #print(peso_sup_valor)
@@ -507,7 +508,7 @@ shinyServer(function(input, output, session) {
             
             #print(longitude_valor)
             #print(height_valor)
-            gpst[i] <- mrk[,2][i]
+            gpst[i] <- mrk$V2[i]
             referencia_inf[i] <- referencia_inf_valor
             referencia_sup[i] <- referencia_sup_valor
             valor_inf[i] <- valor_inf_valor
@@ -523,11 +524,10 @@ shinyServer(function(input, output, session) {
             
         }
         
-        #Por ?ltimo se contruye nuestro dara frame con los datos anteriores
-        
         resultados <- data.frame(gpst, referencia_inf, referencia_sup, valor_inf, valor_sup, peso_inf, peso_sup, latitude, longitude, height, sdn, sde, sdu)
-        resultados$referencias <- sprintf("%03d", seq(1:nrow(resultados))) %>%
-            paste(input$carpetImagenes,., sep="_")
+        
+        resultados$referencias <- sprintf("%04d", seq(1:nrow(resultados))) %>%
+            paste(input$carpetImagenes,"_", .,".JPG", sep="")
         ### Se guarda en los valores reactivos
         datos$resultados <- resultados
         
@@ -556,8 +556,8 @@ shinyServer(function(input, output, session) {
                              ) %>%
             fitBounds(min(datos$resultados$longitude), min(datos$resultados$latitude), max(datos$resultados$longitude), max(datos$resultados$latitude)) %>%
             addAwesomeMarkers(lng = datos$coordenadasReferencia[2], lat = datos$coordenadasReferencia[1], 
-                              group = "punto referencia", icon = icon("home"),
-                              popup = paste("Punto de referenicia", "<br>",
+                              group = "Base de referencia", icon = icon("home"),
+                              popup = paste("Base de referencia", "<br>",
                                             "Latitud: ", datos$coordenadasReferencia[1], "<br>",
                                             "Longitud: ",datos$coordenadasReferencia[2],"<br>")
             ) %>%
@@ -600,15 +600,15 @@ shinyServer(function(input, output, session) {
             ) %>%
             fitBounds(min(datos$resultados$longitude), min(datos$resultados$latitude), max(datos$resultados$longitude), max(datos$resultados$latitude)) %>%
             addAwesomeMarkers(lng = datos$coordenadasReferencia[2], lat = datos$coordenadasReferencia[1], 
-                             group = "punto referencia", icon = icon("home"),
-                             popup = paste("Punto de referenicia", "<br>",
+                             group = "Base de referencia", icon = icon("home"),
+                             popup = paste("Base de referenicia", "<br>",
                                            "Latitud: ", datos$coordenadasReferencia[1], "<br>",
                                            "Longitud: ",datos$coordenadasReferencia[2],"<br>")
             ) %>%
             removeLayersControl()%>%
             addLayersControl(
                 baseGroups = c("OpenStreetMap.Mapnik", "Esri.WorldImagery"),
-                overlayGroups = c("puntos de vuelo", "punto referencia"),
+                overlayGroups = c("puntos de vuelo", "Base de referencia"),
                 options = layersControlOptions(collapsed = TRUE)
             )
     })
