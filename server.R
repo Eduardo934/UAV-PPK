@@ -208,7 +208,7 @@ shinyServer(function(input, output, session) {
             
             usuarios_base<-readRDS("user_base.rds")
             
-            if(length(which(usuarios_base %in% input$usuario))>0){
+            if(length(which(usuarios_base$user %in% input$usuario))>0){
                 showNotification(
                     h4("El nombre de usuario ya existe"), 
                     action = NULL, duration = 5, type = "warning")   
