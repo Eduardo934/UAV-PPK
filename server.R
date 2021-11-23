@@ -639,7 +639,7 @@ shinyServer(function(input, output, session) {
                 paste(.,"_geoet", ".txt", sep="") 
         },
         content = function(file) {
-            write.table(datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")], file, sep = ",", row.names = FALSE)
+            write.table(datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")], file, sep = ",", row.names = FALSE, quote = FALSE)
         }
     )
 
