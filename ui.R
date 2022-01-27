@@ -5,7 +5,7 @@ shinyUI(dashboardPage(
     skin = "black",
     dashboardHeader(title = "UAV-PPK",
                     tags$li(class="dropdown",div(class= "btn-auth",
-                                                 shinyauthr::logoutUI(id = "logout", label = "Salir")),
+                                                 shinyauthr::logoutUI(id = "logout", label = "Exit")),
                             
                     )
                     ),
@@ -14,13 +14,7 @@ shinyUI(dashboardPage(
     ),
     dashboardBody(
         # add login panel UI function
-        shinyauthr::loginUI(id = "login", cookie_expiry = cookie_expiry,
-                            title = "Iniciar Sesión",
-                            user_title = "Nombre de Usuario",
-                            pass_title = "Contraseña",
-                            login_title = "Log in",
-                            error_message = "Nombre de usuario o contraseña incorrectas!"
-                            ),
+        shinyauthr::loginUI(id = "login", cookie_expiry = cookie_expiry),
         
         uiOutput("panelPrincipal"),
         

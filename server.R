@@ -34,7 +34,6 @@ shinyServer(function(input, output, session) {
         credentials()$info
     })
     
-    
     ## Crea la interfaz dependiendo de las credenciales de usuario
     
     output$panelPrincipal<- renderUI(
@@ -66,39 +65,37 @@ shinyServer(function(input, output, session) {
             
                 
         } else if(!is.null(user_data()$permissions) && user_data()$permissions %in% "standard") {
+            
             fluidRow(
                 box(
                     status = "primary",
                     solidHeader = TRUE,
                     width = 2,
-                    title = "Controles",
-                    fileInput("mrkFile", label = "Archivo .MRK", buttonLabel = "Cargar...",
-                              placeholder = "Archivo no seleccionado",
-                              
-                    ),
-                    fileInput("posFile", label = "Archivo .pos", buttonLabel = "Cargar...",
-                              placeholder = "Archivo no seleccionado",
-                              
-                    ),
-                    actionButton("muestraArchivos", "Mostrar"),
+                    title = "Controls",
+                    radioButtons("modo", label = "Select Model UAV",
+                                 choices = list("PHANTOM 4RTK" = "rtk4", "KIT PPK PHANTOM 4 - REACH" = "reach"), 
+                                 selected = "rtk4"),
+                    uiOutput("controlEventsOrMrk"),
+                    fileInput("posFile", label = "File (.pos)"),
+                    actionButton("muestraArchivos", "Show"),
                     uiOutput("mostrarResultados"),
                     uiOutput("botonDescarga")
                 
                 ),
                 tabBox(
-                    title = "Procesos",
+                    title = "Interpolation",
                     width = 10,
                     height = "1100px",
                     id = "tabset1",
-                    tabPanel("Datos", 
+                    tabPanel("Data", 
                              div(
-                                 h4("Archivos"),
+                                 h4("Files"),
                                  div(
                                      box( 
                                          status = "primary",
                                          width = 6,
                                          div(
-                                             h4("Archivo (.pos)"),
+                                             h4("File (.pos)"),
                                              dataTableOutput("tablaRinex")
                                          )
                                      ),
@@ -107,7 +104,7 @@ shinyServer(function(input, output, session) {
                                          status = "primary",
                                          width = 6,
                                          div(
-                                             h4("Archivo (.MRK)"),
+                                             uiOutput("fileTitle"),
                                              dataTableOutput("tablaMrk")
                                          )
                                      )
@@ -116,7 +113,7 @@ shinyServer(function(input, output, session) {
                                  
                                  )
                              ),
-                    tabPanel("Resultados", 
+                    tabPanel("Results", 
                              div(
                                  div(
                                      box( 
@@ -158,7 +155,6 @@ shinyServer(function(input, output, session) {
         data <- usuarios$datos
         
         datatable(data[,c("user", "permissions", "name")], options = list(
-            language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json'),
             pageLength = 10,
             scrollX = TRUE
         ))
@@ -182,7 +178,7 @@ shinyServer(function(input, output, session) {
                 ),
                 easyClose = FALSE,
                 footer = tagList(
-                    actionButton("cancelar","Cancelar"),
+                    actionButton("cancelar","Cancel"),
                     actionButton("guardar","Guardar")
                 )
             )
@@ -245,7 +241,7 @@ shinyServer(function(input, output, session) {
                             easyClose = FALSE,
                             size = "m",
                             footer = tagList(
-                                actionButton("cancelar","Cancelar"),
+                                actionButton("cancelar","Cancel"),
                                 actionButton("borrar_usuario","Eliminar")
                             ) 
                 )
@@ -281,24 +277,77 @@ shinyServer(function(input, output, session) {
            
     })
     
+    
+    ## Panel generado al escoger uno de los dos modos de interolación
+    output$controlEventsOrMrk <- renderUI(
+        expr = if(input$modo %in% "rtk4"){
+            div(
+                fileInput("mrkOrEventsFile", label = "Mrk File (.MRK)")
+            )
+        } else {
+            div(
+                fileInput("mrkOrEventsFile", label = "Events File (.pos)"),
+                numericInput("defaultNumber", "Indicate time delay", value = 0.3)
+            )
+        }
+    )
+    
+    ##Título generado por el tipo de archivo
+    output$fileTitle<- renderUI(expr = if(input$modo %in% "rtk4"){
+        h4("File (.Mrk)")
+    } else {
+        h4("Events File (.pos)")
+    })
+    
     ##Valores reactivos que guardaran datos de los archivos y de los resultados
     datos<- reactiveValues()
     
     observeEvent(input$muestraArchivos,{
         req(input$posFile)
-        req(input$mrkFile)
+        req(input$mrkOrEventsFile)
+        
         #### Se asegura que los archivos tengan la extensión correcta
-        if(length(grep(".pos",input$posFile )) %in% 1 || length(grep(".MRK",input$mrkFile )) %in% 0){
-            showNotification(
-                h4("Asegurate de que los archivos sean:  .pos para Rinex y .mrk para el MRK"), 
-                action = NULL, duration = 5, type = "warning")
-            return()
+        if(input$modo %in% "rtk4"){
+            #### Se asegura que los archivos tengan la extensión correcta
+            if(length(grep(".pos",input$posFile )) %in% 1 || length(grep(".MRK",input$mrkOrEventsFile )) %in% 0){
+                showNotification(
+                    h4("Make sure files are  .pos for Rinex and .mrk for MRK"), 
+                    action = NULL, duration = 5, type = "warning")
+                return()
+            }
+            
+            ## Lee el archivo .MRK directamente
+            datos$archivoMrkOrEvents<-read.table(file= input$mrkOrEventsFile$datapath)
+            
+        } else if(input$modo %in% "reach"){
+            #### Se asegura que los archivos tengan la extensión correcta
+            if(length(grep(".pos",input$posFile )) %in% 1 || length(grep(".pos",input$mrkOrEventsFile )) %in% 0){
+                showNotification(
+                    h4("Make sure both files are .pos"), 
+                    action = NULL, duration = 5, type = "warning")
+                return()
+            }
+            ## Elle el archivo event
+            ####lee el archivo
+            archivoEventsEncabezado<- read.delim(file= input$mrkOrEventsFile$datapath, sep="\t", header = FALSE)
+            ###Encuentra el renglón donde empieza el encabezado
+            for(i in 1:30){
+                if(length(grep("latitude",  archivoEventsEncabezado[i,1],fixed = TRUE)) %in% 0){
+                    i = i +1
+                }else{
+                    ren_encabezado = i ## Encuentra el renglón donde empiezan los datos
+                    break;
+                }
+            }
+            #########lee de nuevo el archivo pero ahora tomando en cuenta el encabezado para leer solo la tabla y lo guarda en un valor reactivo
+            datos$archivoMrkOrEvents<-read.table(file= input$mrkOrEventsFile$datapath, skip = i, header = F)
+            
+            
         }
         
-        ## Lee el archivo .MRK directamente
-        datos$archivoMrk<-read.table(file= input$mrkFile$datapath)
+
         
-        
+        ############################Lee el primer archivo pos
         ##Lee el archivo .pos pero se asegura de que el encabezado sea el correcto y de leer el punto de control
         archivoPosEncabezado<- read.delim(file= input$posFile$datapath, sep="\t", header = FALSE)
         
@@ -350,7 +399,6 @@ shinyServer(function(input, output, session) {
         req(datos$archivoPos)
         
         datatable(datos$archivoPos, options = list(
-            language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json'),
             pageLength = 15,
             scrollX = TRUE
         ))
@@ -358,10 +406,9 @@ shinyServer(function(input, output, session) {
     })
     
     output$tablaMrk<- renderDataTable({
-        req(datos$archivoMrk)
+        req(datos$archivoMrkOrEvents)
         
-        datatable(datos$archivoMrk, options = list(
-            language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json'),
+        datatable(datos$archivoMrkOrEvents, options = list(
             pageLength = 15,
             scrollX = TRUE
         ))
@@ -401,19 +448,19 @@ shinyServer(function(input, output, session) {
     
     
     ############ depliega boton para hace el cálculo
-    output$mostrarResultados<- renderUI(expr = if(!is.null(datos$archivoMrk) && !is.null(datos$archivoPos)){
+    output$mostrarResultados<- renderUI(expr = if(!is.null(datos$archivoMrkOrEvents) && !is.null(datos$archivoPos)){
         req(datos$preProceso %in% TRUE)
         div(
-            h3("Interpolar"),
-            actionButton("iniciar", "Iniciar")
+            h3("Interpolation"),
+            actionButton("iniciar", "Start", class = "btn-success")
         )
     })
     
     output$botonDescarga<- renderUI(expr = if(!is.null(datos$resultados)){
         div(
-            h3("Descarga Resultados"),
-            downloadButton("descargaInterpolacionCsv", label = "Descarga(.csv)"),
-            downloadButton("descargaInterpolacionTxt", label = "Descarga(.txt)")  
+            h3("Download results"),
+            downloadButton("descargaInterpolacionCsv", label = "Download(.csv)"),
+            downloadButton("descargaInterpolacionTxt", label = "Download(.txt)")  
         )
     } else {
         NULL
@@ -421,18 +468,18 @@ shinyServer(function(input, output, session) {
     
     observeEvent(input$iniciar,{
         showModal(
-            modalDialog(title = "Interpolar",
+            modalDialog(title = "Interpolation",
                         fluidPage(
                             column(12,
-                                   h4("Nombre de la carpeta que contiene las imágenes"),
-                                   textInput("carpetImagenes", label="Carpeta",value="img" ,placeholder = "folder")
+                                   h4("Select Images"),
+                                   fileInput("carpetImagenes", label = "Select all images", multiple = TRUE, accept = c("image/*")),
                                    )
                             ),
                         easyClose = FALSE,
                         size = "m",
                         footer = tagList(
-                            actionButton("cancelar","Cancelar"),
-                            actionButton("interpolar","Iniciar")
+                            actionButton("cancelar","Cancel"),
+                            actionButton("interpolar","Start", class = "btn-success")
                         ) 
             )
         )
@@ -441,18 +488,30 @@ shinyServer(function(input, output, session) {
     observeEvent(input$interpolar, {
         
         req(datos$archivoPos)
-        req(datos$archivoMrk)
+        req(datos$archivoMrkOrEvents)
         req(input$carpetImagenes)
+        ##Asegurarse que el número de imágenes es el correcto
+        if(length(input$carpetImagenes$name) != nrow(datos$archivoMrkOrEvents)){
+            showNotification(
+                h4("The number of images does not match with the data"), 
+                action = NULL, duration = 5, type = "warning")
+            return()
+        }
+        
         ## Cambia a la página de resultados
         updateTabsetPanel(session, "tabset1",
-                          selected = "Resultados")
+                          selected = "Results")
         
         removeModal()
         
         
         rinex <- as.data.frame(datos$archivoPos)
         
-        mrk <- as.data.frame(datos$archivoMrk)
+        MrkorEvents <- datos$archivoMrkOrEvents
+        if(input$modo %in% "reach"){
+            MrkorEvents$V2 <- MrkorEvents$V2 + input$defaultNumber
+        }
+        mrk <- as.data.frame(MrkorEvents)
         
         ### Asegurarse de que los nombres de las columnas sean los correctos para poder manejar las columnas
         
@@ -526,8 +585,9 @@ shinyServer(function(input, output, session) {
         
         resultados <- data.frame(gpst, referencia_inf, referencia_sup, valor_inf, valor_sup, peso_inf, peso_sup, latitude, longitude, height, sdn, sde, sdu)
         
-        resultados$referencias <- sprintf("%04d", seq(1:nrow(resultados))) %>%
-            paste(input$carpetImagenes,"_", .,".JPG", sep="")
+        resultados$referencias <- input$carpetImagenes$name
+        #resultados$referencias <- sprintf("%04d", seq(1:nrow(resultados))) %>%
+        #    paste(ref_name,"_", .,".JPG", sep="")
         ### Se guarda en los valores reactivos
         datos$resultados <- resultados
         
@@ -546,25 +606,25 @@ shinyServer(function(input, output, session) {
             clearShapes() %>%
             clearMarkers() %>%
             addCircleMarkers(lng = datos$resultados$longitude, lat = datos$resultados$latitude, 
-                             color = coloresMapa,group="puntos de vuelo",
-                             popup = paste("Referencia: ", datos$resultados$referencias, "<br>",
-                                           "Latitud: ",datos$resultados$latitude,"<br>",
-                                           "Longitud: ",datos$resultados$longitude,"<br>",
+                             color = coloresMapa,group="Flight points",
+                             popup = paste("Reference: ", datos$resultados$referencias, "<br>",
+                                           "Latitude: ",datos$resultados$latitude,"<br>",
+                                           "Longitude: ",datos$resultados$longitude,"<br>",
                                            "sdn: ",datos$resultados$sdn, "<br>",
                                            "sde: ", datos$resultados$sde, "<br>",
                                            "sdu: ", datos$resultados$sdu, "<br>")
                              ) %>%
             fitBounds(min(datos$resultados$longitude), min(datos$resultados$latitude), max(datos$resultados$longitude), max(datos$resultados$latitude)) %>%
             addAwesomeMarkers(lng = datos$coordenadasReferencia[2], lat = datos$coordenadasReferencia[1], 
-                              group = "Base de referencia", icon = icon("home"),
-                              popup = paste("Base de referencia", "<br>",
-                                            "Latitud: ", datos$coordenadasReferencia[1], "<br>",
-                                            "Longitud: ",datos$coordenadasReferencia[2],"<br>")
+                              group = "Reference point", icon = icon("home"),
+                              popup = paste("Reference point", "<br>",
+                                            "Latitude: ", datos$coordenadasReferencia[1], "<br>",
+                                            "Longitude: ",datos$coordenadasReferencia[2],"<br>")
             ) %>%
             removeLayersControl()%>%
             addLayersControl(
                 baseGroups = c("OpenStreetMap.Mapnik", "Esri.WorldImagery"),
-                overlayGroups = c("puntos de vuelo", "punto referencia"),
+                overlayGroups = c("Flight points", "punto referencia"),
                 options = layersControlOptions(collapsed = TRUE)
             )
     })
@@ -572,7 +632,7 @@ shinyServer(function(input, output, session) {
     ###Refresca la pantalla del mapa
     observeEvent(input$reset,{
         req(datos$archivoPos)
-        req(datos$archivoMrk)
+        req(datos$archivoMrkOrEvents)
         req(input$carpetImagenes)
         
         #### Renderiza el mapa
@@ -590,34 +650,38 @@ shinyServer(function(input, output, session) {
             clearShapes() %>%
             clearMarkers() %>%
             addCircleMarkers(lng = datos$resultados$longitude, lat = datos$resultados$latitude, 
-                             color = coloresMapa,group="puntos de vuelo",
-                             popup = paste("Referencia: ", datos$resultados$referencias, "<br>",
-                                           "Latitud: ",datos$resultados$latitude,"<br>",
-                                           "Longitud: ",datos$resultados$longitude,"<br>",
+                             color = coloresMapa,group="Flight points",
+                             popup = paste("Reference: ", datos$resultados$referencias, "<br>",
+                                           "Latitude: ",datos$resultados$latitude,"<br>",
+                                           "Longitude: ",datos$resultados$longitude,"<br>",
                                            "sdn: ",datos$resultados$sdn, "<br>",
                                            "sde: ", datos$resultados$sde, "<br>",
                                            "sdu: ", datos$resultados$sdu, "<br>")
             ) %>%
             fitBounds(min(datos$resultados$longitude), min(datos$resultados$latitude), max(datos$resultados$longitude), max(datos$resultados$latitude)) %>%
             addAwesomeMarkers(lng = datos$coordenadasReferencia[2], lat = datos$coordenadasReferencia[1], 
-                             group = "Base de referencia", icon = icon("home"),
-                             popup = paste("Base de referenicia", "<br>",
-                                           "Latitud: ", datos$coordenadasReferencia[1], "<br>",
-                                           "Longitud: ",datos$coordenadasReferencia[2],"<br>")
+                             group = "Reference point", icon = icon("home"),
+                             popup = paste("Reference point", "<br>",
+                                           "Latitude: ", datos$coordenadasReferencia[1], "<br>",
+                                           "Longitude: ",datos$coordenadasReferencia[2],"<br>")
             ) %>%
             removeLayersControl()%>%
             addLayersControl(
                 baseGroups = c("OpenStreetMap.Mapnik", "Esri.WorldImagery"),
-                overlayGroups = c("puntos de vuelo", "Base de referencia"),
+                overlayGroups = c("Flight points", "Reference point"),
                 options = layersControlOptions(collapsed = TRUE)
             )
     })
     
     output$tablaResultados<- renderDataTable({
         req(datos$resultados)
+        print(names(datos$resultados))
+        datosResultadosTabla <- datos$resultados
         
-        datatable(datos$resultados[,c("referencias", "gpst", "latitude", "longitude", "height", "sdn", "sde", "sdu")], options = list(
-            language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json'),
+        
+        datatable(datosResultadosTabla[,c("referencias", "gpst", "latitude", "longitude", "height", "sdn", "sde", "sdu")], 
+                  colnames=c("References", "gpst", "latitude", "longitude", "height", "sdn", "sde", "sdu"),
+                  options = list(
             pageLength = 10,
             scrollX = TRUE
         ))
@@ -629,7 +693,9 @@ shinyServer(function(input, output, session) {
             paste(.,"_geoet", ".csv", sep="") 
         },
         content = function(file) {
-            write.csv(datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")], file,  row.names = FALSE)
+            datosR<- datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")]
+            names(datosR) <- c("References", "latitude", "longitude", "height", "sdn", "sde", "sdu")
+            write.csv(datosR, file,  row.names = FALSE)
         }
     )
     
@@ -639,7 +705,10 @@ shinyServer(function(input, output, session) {
                 paste(.,"_geoet", ".txt", sep="") 
         },
         content = function(file) {
-            write.table(datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")], file, sep = ",", row.names = FALSE, quote = FALSE)
+            datosR<- datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")]
+            names(datosR) <- c("References", "latitude", "longitude", "height", "sdn", "sde", "sdu")
+            
+            write.table(datosR, file, sep = ",", row.names = FALSE, quote = FALSE)
         }
     )
 
