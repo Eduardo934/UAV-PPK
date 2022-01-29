@@ -287,7 +287,7 @@ shinyServer(function(input, output, session) {
         } else {
             div(
                 fileInput("mrkOrEventsFile", label = "Events File (.pos)"),
-                numericInput("defaultNumber", "Indicate time delay", value = 0.3)
+                numericInput("defaultNumber", "Indicate time delay (seconds)", value = 0.3)
             )
         }
     )
@@ -471,9 +471,9 @@ shinyServer(function(input, output, session) {
             modalDialog(title = "Interpolation",
                         fluidPage(
                             column(12,
-                                   h4("Select Images"),
-                                   fileInput("carpetImagenes", label = "Select all images", multiple = TRUE, accept = c("image/*")),
-                                   )
+                                   h4("Name of the first image"),
+                                   textInput("carpetImagenes", label="", value="img")
+                            )
                             ),
                         easyClose = FALSE,
                         size = "m",
@@ -490,13 +490,6 @@ shinyServer(function(input, output, session) {
         req(datos$archivoPos)
         req(datos$archivoMrkOrEvents)
         req(input$carpetImagenes)
-        ##Asegurarse que el número de imágenes es el correcto
-        if(length(input$carpetImagenes$name) != nrow(datos$archivoMrkOrEvents)){
-            showNotification(
-                h4("The number of images does not match with the data"), 
-                action = NULL, duration = 5, type = "warning")
-            return()
-        }
         
         ## Cambia a la página de resultados
         updateTabsetPanel(session, "tabset1",
@@ -584,11 +577,16 @@ shinyServer(function(input, output, session) {
         }
         
         resultados <- data.frame(gpst, referencia_inf, referencia_sup, valor_inf, valor_sup, peso_inf, peso_sup, latitude, longitude, height, sdn, sde, sdu)
+         ## Busca números en el nombre de la imágen para iniciar el conteo
+        fotoN <- as.numeric(gsub(".*?([0-9]+).*", "\\1", input$carpetImagenes))  
+     
+        if(is.na(fotoN)){
+            fotoN <- 1
+        }
         
-        resultados$referencias <- input$carpetImagenes$name
-        #resultados$referencias <- sprintf("%04d", seq(1:nrow(resultados))) %>%
-        #    paste(ref_name,"_", .,".JPG", sep="")
-        ### Se guarda en los valores reactivos
+        resultados$referencias <- sprintf("%04d", rep(seq(1:999),20)[c(fotoN:(fotoN+nrow(resultados)-1))]) %>%
+            paste(gsub('[[:digit:]]+', '', input$carpetImagenes), .,".JPG", sep="")
+        # Se guarda en los valores reactivos
         datos$resultados <- resultados
         
         #### Renderiza el mapa
@@ -675,7 +673,6 @@ shinyServer(function(input, output, session) {
     
     output$tablaResultados<- renderDataTable({
         req(datos$resultados)
-        print(names(datos$resultados))
         datosResultadosTabla <- datos$resultados
         
         
@@ -695,7 +692,7 @@ shinyServer(function(input, output, session) {
         content = function(file) {
             datosR<- datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")]
             names(datosR) <- c("References", "latitude", "longitude", "height", "sdn", "sde", "sdu")
-            write.csv(datosR, file,  row.names = FALSE)
+            write.csv(datosR, file,  row.names = FALSE, quote = FALSE)
         }
     )
     
