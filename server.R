@@ -460,21 +460,33 @@ shinyServer(function(input, output, session) {
         div(
             h3("Download results"),
             downloadButton("descargaInterpolacionCsv", label = "Download(.csv)"),
-            downloadButton("descargaInterpolacionTxt", label = "Download(.txt)")  
+            br(),
+            downloadButton("descargaInterpolacionTxt", label = "Download(.txt)"),
+            br(),
+            downloadButton("descargaPointsKML", label = "Download KML")
         )
     } else {
         NULL
     })
     
+    
+    output$namingPanel <- renderUI(expr = if(input$modo %in% "reach"){
+        fluidPage(
+            column(12,
+                   h4("Name of the first image"),
+                   textInput("carpetImagenes", label="", value="img")
+            ))
+    } else {
+        fluidPage(
+            column(12,
+                   h4("Name of Directory"),
+                   textInput("carpetImagenes", label="", value="img")
+            ))
+    })
     observeEvent(input$iniciar,{
         showModal(
             modalDialog(title = "Interpolation",
-                        fluidPage(
-                            column(12,
-                                   h4("Name of the first image"),
-                                   textInput("carpetImagenes", label="", value="img")
-                            )
-                            ),
+                        uiOutput("namingPanel"),
                         easyClose = FALSE,
                         size = "m",
                         footer = tagList(
@@ -577,15 +589,28 @@ shinyServer(function(input, output, session) {
         }
         
         resultados <- data.frame(gpst, referencia_inf, referencia_sup, valor_inf, valor_sup, peso_inf, peso_sup, latitude, longitude, height, sdn, sde, sdu)
-         ## Busca números en el nombre de la imágen para iniciar el conteo
-        fotoN <- as.numeric(gsub(".*?([0-9]+).*", "\\1", input$carpetImagenes))  
-     
-        if(is.na(fotoN)){
-            fotoN <- 1
+         
+        ###Nombra los puntos de acuerdo a la carpeta o al nombre de la primera imagen de acuerdo al
+        #tipo de proceso
+        if(input$modo %in% "rtk4"){
+            resultados$referencias <- sprintf("%04d", seq(1:nrow(resultados))) %>%
+                paste(input$carpetImagenes,"_", .,".JPG", sep="")
+        } else {
+            if(input$modo %in% "reach"){
+                ## Busca números en el nombre de la imágen para iniciar el conteo
+                fotoN <- as.numeric(gsub(".*?([0-9]+).*", "\\1", input$carpetImagenes))  
+                
+                if(is.na(fotoN)){
+                    fotoN <- 1
+                }
+                
+                resultados$referencias <- sprintf("%04d", rep(seq(1:999),20)[c(fotoN:(fotoN+nrow(resultados)-1))]) %>%
+                    paste(gsub('[[:digit:]]+', '', input$carpetImagenes), .,".JPG", sep="")
+            }
         }
         
-        resultados$referencias <- sprintf("%04d", rep(seq(1:999),20)[c(fotoN:(fotoN+nrow(resultados)-1))]) %>%
-            paste(gsub('[[:digit:]]+', '', input$carpetImagenes), .,".JPG", sep="")
+        
+        
         # Se guarda en los valores reactivos
         datos$resultados <- resultados
         
@@ -617,7 +642,8 @@ shinyServer(function(input, output, session) {
                               group = "Reference point", icon = icon("home"),
                               popup = paste("Reference point", "<br>",
                                             "Latitude: ", datos$coordenadasReferencia[1], "<br>",
-                                            "Longitude: ",datos$coordenadasReferencia[2],"<br>")
+                                            "Longitude: ",datos$coordenadasReferencia[2],"<br>",
+                                            "Ellipsoidal height: ",datos$coordenadasReferencia[3],"<br>")
             ) %>%
             removeLayersControl()%>%
             addLayersControl(
@@ -661,7 +687,8 @@ shinyServer(function(input, output, session) {
                              group = "Reference point", icon = icon("home"),
                              popup = paste("Reference point", "<br>",
                                            "Latitude: ", datos$coordenadasReferencia[1], "<br>",
-                                           "Longitude: ",datos$coordenadasReferencia[2],"<br>")
+                                           "Longitude: ",datos$coordenadasReferencia[2],"<br>",
+                                           "Ellipsoidal height: ",datos$coordenadasReferencia[3],"<br>")
             ) %>%
             removeLayersControl()%>%
             addLayersControl(
@@ -706,6 +733,23 @@ shinyServer(function(input, output, session) {
             names(datosR) <- c("References", "latitude", "longitude", "height", "sdn", "sde", "sdu")
             
             write.table(datosR, file, sep = ",", row.names = FALSE, quote = FALSE)
+        }
+    )
+    
+    
+    
+    output$descargaPointsKML<- downloadHandler(
+        filename = function() {
+            gsub(".pos","", input$posFile$name) %>%
+                paste(.,"_geoet", ".kml", sep="") 
+        },
+        content = function(file) {
+            datosR<- datos$resultados[,c("referencias", "latitude", "longitude", "height", "sdn", "sde", "sdu")]
+            names(datosR) <- c("References", "latitude", "longitude", "height", "sdn", "sde", "sdu")
+            
+            sfPoints <- st_as_sf(datosR, coords=c("longitude", "latitude"))
+            
+            st_write(sfPoints, file, driver = "kml", delete_dsn = TRUE)
         }
     )
 

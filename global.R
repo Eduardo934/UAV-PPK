@@ -6,5 +6,6 @@ library(sodium)
 library(dplyr)
 library(DT)
 library(leaflet)
+library(sf)
 
 
